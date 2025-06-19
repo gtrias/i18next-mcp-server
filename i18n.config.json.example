@@ -1,0 +1,18 @@
+{
+  "projectRoot": ".",
+  "localesPath": "public/locales",
+  "languages": ["en", "es", "fr", "de"],
+  "namespaces": ["translation", "common", "navigation"],
+  "defaultLanguage": "en",
+  "defaultNamespace": "translation",
+  "keySeparator": ".",
+  "nsSeparator": ":",
+  "interpolation": {
+    "prefix": "{{",
+    "suffix": "}}"
+  },
+  "backup": {
+    "enabled": true,
+    "path": ".backups/i18n"
+  }
+} 
