@@ -1,0 +1,79 @@
+{
+  "master": {
+    "tasks": [
+      {
+        "id": 26,
+        "title": "Setup Testing Environment",
+        "description": "Create the basic testing environment with Vitest configuration and directory structure for the i18next-mcp-server.",
+        "details": "1. Create a `tests/` directory in the project root\n2. Install necessary testing dependencies: `vitest`, `@vitest/coverage-c8`\n3. Create a minimal `vitest.config.ts` file with the following configuration:\n```typescript\nimport { defineConfig } from 'vitest/config'\n\nexport default defineConfig({\n  test: {\n    environment: 'node',\n    include: ['tests/**/*.test.ts'],\n    coverage: {\n      reporter: ['text', 'json', 'html'],\n      exclude: ['node_modules/', 'tests/']\n    },\n    testTimeout: 30000 // 30 seconds max per test as per requirements\n  }\n})\n```\n4. Add test scripts to package.json:\n```json\n\"scripts\": {\n  \"test\": \"vitest run\",\n  \"test:watch\": \"vitest\",\n  \"test:coverage\": \"vitest run --coverage\"\n}\n```\n5. Create a basic test helper file for common testing utilities",
+        "testStrategy": "Verify the testing environment works by running a simple smoke test that confirms Vitest is properly configured. Check that the test directory structure is created correctly and that the configuration file is valid by running `npm test` with a placeholder test.",
+        "priority": "high",
+        "dependencies": [],
+        "status": "done",
+        "subtasks": []
+      },
+      {
+        "id": 27,
+        "title": "Implement MCP Protocol Tests",
+        "description": "Create tests to verify the server starts correctly and responds to basic MCP protocol requests.",
+        "details": "Create a test file `tests/mcp-protocol.test.ts` that tests:\n\n1. Server initialization:\n```typescript\nimport { startServer } from '../src/server'\nimport { afterEach, beforeEach, describe, expect, it } from 'vitest'\n\ndescribe('MCP Server', () => {\n  let server: any\n  let port: number\n  \n  beforeEach(async () => {\n    port = 3000 + Math.floor(Math.random() * 1000)\n    server = await startServer({ port })\n  })\n  \n  afterEach(async () => {\n    await server.close()\n  })\n  \n  it('starts the server successfully', async () => {\n    expect(server).toBeDefined()\n    // Add check that server is listening\n  })\n})\n```\n\n2. Test basic MCP requests:\n   - Test initialize request\n   - Test list tools request\n   - Test tool call request\n\nUse a simple MCP client implementation or mock to send requests to the server and verify responses match the expected format and content.",
+        "testStrategy": "Use integration testing approach to verify the server responds correctly to MCP protocol requests. Create a test MCP client that can send requests to the server and validate responses. Test both successful scenarios and error cases. Verify that the server returns proper status codes and error messages for invalid requests.",
+        "priority": "high",
+        "dependencies": [
+          26
+        ],
+        "status": "done",
+        "subtasks": []
+      },
+      {
+        "id": 28,
+        "title": "Implement Core Tool Tests",
+        "description": "Create tests for the core tools: get_project_info, health_check, and validate_files.",
+        "details": "Create a test file `tests/core-tools.test.ts` that tests the three main tools:\n\n1. Test `get_project_info` tool:\n```typescript\nimport { describe, it, expect } from 'vitest'\nimport { callTool } from './test-helpers'\n\ndescribe('Core Tools', () => {\n  it('get_project_info returns valid project information', async () => {\n    const result = await callTool('get_project_info', {})\n    expect(result).toHaveProperty('name')\n    expect(result).toHaveProperty('version')\n    // Add more assertions for expected project info properties\n  })\n})\n```\n\n2. Test `health_check` tool:\n```typescript\nit('health_check returns server status', async () => {\n  const result = await callTool('health_check', {})\n  expect(result).toHaveProperty('status')\n  expect(result.status).toBe('ok')\n  // Add more assertions for expected health check properties\n})\n```\n\n3. Test `validate_files` tool:\n```typescript\nit('validate_files correctly validates i18n files', async () => {\n  // Setup test files with known validation issues\n  const result = await callTool('validate_files', {\n    files: ['path/to/test/file1.json', 'path/to/test/file2.json']\n  })\n  expect(result).toHaveProperty('valid')\n  expect(result).toHaveProperty('issues')\n  // Add more specific assertions based on expected validation behavior\n})\n```\n\nCreate test fixtures with sample i18n files for validation tests.",
+        "testStrategy": "Use integration tests to verify each core tool functions correctly. Create test fixtures with sample i18n files for validation tests. Test both valid and invalid scenarios for each tool. Verify that tools return the expected data structure and handle edge cases appropriately.",
+        "priority": "medium",
+        "dependencies": [
+          26,
+          27
+        ],
+        "status": "done",
+        "subtasks": []
+      },
+      {
+        "id": 29,
+        "title": "Implement Error Handling Tests",
+        "description": "Create tests to verify the server handles error scenarios gracefully, including invalid configuration, missing files, and malformed requests.",
+        "details": "Create a test file `tests/error-handling.test.ts` that tests various error scenarios:\n\n1. Test invalid configuration:\n```typescript\nimport { describe, it, expect } from 'vitest'\nimport { startServer } from '../src/server'\n\ndescribe('Error Handling', () => {\n  it('handles invalid configuration gracefully', async () => {\n    await expect(startServer({ \n      configPath: 'non-existent-config.json' \n    })).rejects.toThrow()\n    // Or if it should handle this gracefully without throwing:\n    // const server = await startServer({ configPath: 'non-existent-config.json' })\n    // expect(server.status).toBe('error')\n  })\n})\n```\n\n2. Test missing files scenario:\n```typescript\nit('handles missing files gracefully', async () => {\n  const result = await callTool('validate_files', {\n    files: ['non-existent-file.json']\n  })\n  expect(result).toHaveProperty('error')\n  expect(result.error).toContain('file not found')\n})\n```\n\n3. Test malformed requests:\n```typescript\nit('handles malformed MCP requests gracefully', async () => {\n  const response = await sendMalformedRequest()\n  expect(response.status).toBe(400)\n  expect(response.body).toHaveProperty('error')\n})\n```\n\nImplement helper functions to simulate various error conditions.",
+        "testStrategy": "Test error handling by deliberately triggering error conditions and verifying the server responds appropriately. Test both API-level errors and internal errors. Verify error messages are helpful and provide guidance on how to fix the issue. Ensure the server doesn't crash when encountering errors.",
+        "priority": "medium",
+        "dependencies": [
+          26,
+          27
+        ],
+        "status": "pending",
+        "subtasks": []
+      },
+      {
+        "id": 30,
+        "title": "Implement End-to-End Cursor Integration Test",
+        "description": "Create an end-to-end test that simulates how Cursor would interact with the i18next-mcp-server to verify the integration works correctly.",
+        "details": "Create a test file `tests/cursor-integration.test.ts` that simulates the Cursor client integration:\n\n1. Setup a mock Cursor client:\n```typescript\nimport { describe, it, expect, beforeAll, afterAll } from 'vitest'\nimport { startServer } from '../src/server'\nimport { MockCursorClient } from './mock-cursor-client'\n\ndescribe('Cursor Integration', () => {\n  let server: any\n  let cursorClient: MockCursorClient\n  \n  beforeAll(async () => {\n    server = await startServer({ port: 3456 })\n    cursorClient = new MockCursorClient('http://localhost:3456')\n  })\n  \n  afterAll(async () => {\n    await server.close()\n  })\n  \n  it('successfully initializes connection with server', async () => {\n    const initResult = await cursorClient.initialize()\n    expect(initResult.success).toBe(true)\n  })\n})\n```\n\n2. Test the complete workflow that Cursor would typically use:\n```typescript\nit('completes a typical Cursor workflow successfully', async () => {\n  // 1. Initialize connection\n  await cursorClient.initialize()\n  \n  // 2. List available tools\n  const tools = await cursorClient.listTools()\n  expect(tools).toContain('get_project_info')\n  expect(tools).toContain('health_check')\n  expect(tools).toContain('validate_files')\n  \n  // 3. Call health check\n  const healthResult = await cursorClient.callTool('health_check', {})\n  expect(healthResult.status).toBe('ok')\n  \n  // 4. Get project info\n  const projectInfo = await cursorClient.callTool('get_project_info', {})\n  expect(projectInfo).toHaveProperty('name')\n  \n  // 5. Validate some files\n  const validationResult = await cursorClient.callTool('validate_files', {\n    files: ['test-fixtures/valid.json', 'test-fixtures/invalid.json']\n  })\n  expect(validationResult).toHaveProperty('valid')\n  expect(validationResult).toHaveProperty('issues')\n})\n```\n\nImplement a `MockCursorClient` class that simulates how Cursor would interact with the MCP server.",
+        "testStrategy": "Create an end-to-end test that simulates the complete workflow a Cursor client would use when interacting with the server. Verify that all steps in the workflow complete successfully. Test with both valid and invalid inputs to ensure proper error handling. This test should catch integration issues that users might experience.",
+        "priority": "high",
+        "dependencies": [
+          26,
+          27,
+          28,
+          29
+        ],
+        "status": "pending",
+        "subtasks": []
+      }
+    ],
+    "metadata": {
+      "created": "2025-06-19T20:30:49.828Z",
+      "updated": "2025-06-19T20:42:55.378Z",
+      "description": "Tasks for master context"
+    }
+  }
+}

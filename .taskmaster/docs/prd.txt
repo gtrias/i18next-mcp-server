@@ -1,0 +1,52 @@
+# Simplified Testing Strategy for i18next-mcp-server
+
+## Problem Statement
+Users are experiencing errors when trying to use the i18next-mcp-server from Cursor. We need basic testing to ensure reliability.
+
+## Simple Goals
+1. **MCP Integration Tests**: Ensure the server works correctly with MCP clients like Cursor
+2. **Core Functionality Tests**: Test the main features that users actually use
+3. **Error Handling**: Make sure errors are handled gracefully
+
+## Testing Strategy
+
+### Phase 1: Essential Tests Only
+1. **MCP Protocol Tests**: 
+   - Server starts correctly
+   - Responds to basic MCP requests (initialize, list tools, call tools)
+   - Returns proper error messages
+
+2. **Core Tool Tests**:
+   - `get_project_info` - most basic functionality
+   - `health_check` - main feature users need
+   - `validate_files` - common use case
+
+3. **Basic Error Scenarios**:
+   - Invalid configuration
+   - Missing files
+   - Malformed requests
+
+### Implementation Approach
+- **Single test directory**: `tests/` (no complex structure)
+- **One config file**: `vitest.config.ts`
+- **Focus on integration**: Test the server as users would use it
+- **Minimal mocking**: Only mock what's absolutely necessary
+
+### Success Criteria
+- Server starts without errors
+- Basic MCP tools work correctly
+- Users can integrate with Cursor successfully
+- Test suite runs in under 30 seconds
+
+## What We're NOT Doing
+- Complex unit tests for every module
+- Multiple test configurations
+- Extensive mocking systems
+- Performance testing
+- Complex CI/CD integration
+
+## Acceptance Criteria
+1. Tests pass consistently
+2. Coverage of main user workflows
+3. Easy to run and understand
+4. Catches the integration issues users are experiencing 
