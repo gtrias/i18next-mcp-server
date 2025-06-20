@@ -258,7 +258,6 @@ This project is licensed under the MIT License - see the [LICENSE](LICENSE) file
 
 - 📋 [Issue Tracker](https://github.com/gtrias/i18next-mcp-server/issues)
 - 💬 [Discussions](https://github.com/gtrias/i18next-mcp-server/discussions)
-- 📧 Email: dev@galleries.com
 
 ## 🙏 Acknowledgments
 
