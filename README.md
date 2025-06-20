@@ -22,7 +22,7 @@ Add this to your Cursor MCP settings:
   "mcpServers": {
     "i18next-translation": {
       "command": "npx",
-      "args": ["i18next-mcp-server@latest"],
+      "args": ["-y", "i18next-mcp-server@latest"],
       "env": {
         "I18N_PROJECT_ROOT": "/path/to/your/project",
         "I18N_LOCALES_PATH": "public/locales",
