@@ -1330,7 +1330,7 @@ async function main(): Promise<void> {
   // Handle help flag
   if (args.includes('--help') || args.includes('-h')) {
     console.log(`
-i18next MCP Server v1.0.7
+i18next MCP Server v1.0.8
 ==========================
 
 This is a Model Context Protocol (MCP) server for i18next translation management.
@@ -1386,7 +1386,7 @@ For more information: https://github.com/gtrias/i18next-mcp-server
   
       // Handle version flag
     if (args.includes('--version') || args.includes('-v')) {
-      console.log('1.0.7');
+      console.log('1.0.8');
       process.exit(0);
     }
   
