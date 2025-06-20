@@ -15,6 +15,22 @@ import type { KeyManager } from './management/key-manager.js';
 import type { AnalyticsEngine } from './reporting/analytics.js';
 import { I18nError } from './types/index.js';
 import { I18nextScannerIntegration } from './automation/scanner-integration.js';
+import {
+  getProjectInfoSchema,
+  healthCheckSchema,
+  validateFilesSchema,
+  listFilesSchema,
+  coverageReportSchema,
+  qualityAnalysisSchema,
+  usageAnalysisSchema,
+  exportDataSchema,
+  syncMissingKeysSchema,
+  addTranslationKeySchema,
+  syncFromSourceSchema,
+  syncAllMissingSchema,
+  getMissingKeysSchema,
+  scanCodeForMissingKeysSchema
+} from './schemas.js';
 
 export class I18nTranslationServer {
   private server: Server;
@@ -392,69 +408,95 @@ export class I18nTranslationServer {
         await this.ensureInitialized();
 
         switch (name) {
-          case 'get_project_info':
+          case 'get_project_info': {
+            getProjectInfoSchema.parse(args || {});
             return await this.handleGetProjectInfo();
+          }
           
-          case 'health_check':
-            return await this.handleHealthCheck(args);
+          case 'health_check': {
+            const validatedArgs = healthCheckSchema.parse(args || {});
+            return await this.handleHealthCheck(validatedArgs);
+          }
           
-          case 'validate_files':
-            return await this.handleValidateFiles(args);
+          case 'validate_files': {
+            const validatedArgs = validateFilesSchema.parse(args || {});
+            return await this.handleValidateFiles(validatedArgs);
+          }
           
-          case 'list_files':
-            return await this.handleListFiles(args);
+          case 'list_files': {
+            const validatedArgs = listFilesSchema.parse(args || {});
+            return await this.handleListFiles(validatedArgs);
+          }
           
-          case 'coverage_report':
-            return await this.handleCoverageReport(args);
+          case 'coverage_report': {
+            const validatedArgs = coverageReportSchema.parse(args || {});
+            return await this.handleCoverageReport(validatedArgs);
+          }
           
-          case 'quality_analysis':
-            return await this.handleQualityAnalysis(args);
+          case 'quality_analysis': {
+            const validatedArgs = qualityAnalysisSchema.parse(args || {});
+            return await this.handleQualityAnalysis(validatedArgs);
+          }
           
-          case 'usage_analysis':
-            return await this.handleUsageAnalysis(args);
+          case 'usage_analysis': {
+            const validatedArgs = usageAnalysisSchema.parse(args || {});
+            return await this.handleUsageAnalysis(validatedArgs);
+          }
           
-          case 'export_data':
-            return await this.handleExportData(args);
+          case 'export_data': {
+            const validatedArgs = exportDataSchema.parse(args || {});
+            return await this.handleExportData(validatedArgs);
+          }
 
-          case 'sync_missing_keys':
-            return await this.handleSyncMissingKeys(args);
+          case 'sync_missing_keys': {
+            const validatedArgs = syncMissingKeysSchema.parse(args || {});
+            return await this.handleSyncMissingKeys(validatedArgs);
+          }
 
-          case 'add_translation_key':
-            return await this.handleAddTranslationKey(args);
+          case 'add_translation_key': {
+            const validatedArgs = addTranslationKeySchema.parse(args || {});
+            return await this.handleAddTranslationKey(validatedArgs);
+          }
 
-          case 'sync_from_source':
-            return await this.handleSyncFromSource(args);
+          case 'sync_from_source': {
+            const validatedArgs = syncFromSourceSchema.parse(args || {});
+            return await this.handleSyncFromSource(validatedArgs);
+          }
 
-          case 'sync_all_missing':
-            return await this.handleSyncAllMissing(args);
+          case 'sync_all_missing': {
+            const validatedArgs = syncAllMissingSchema.parse(args || {});
+            return await this.handleSyncAllMissing(validatedArgs);
+          }
 
-          case 'get_missing_keys':
-            return await this.handleGetMissingKeys(args);
+          case 'get_missing_keys': {
+            const validatedArgs = getMissingKeysSchema.parse(args || {});
+            return await this.handleGetMissingKeys(validatedArgs);
+          }
           
-          case 'scan_code_for_missing_keys':
-            return await this.handleScanCodeForMissingKeys(args);
+          case 'scan_code_for_missing_keys': {
+            const validatedArgs = scanCodeForMissingKeysSchema.parse(args || {});
+            return await this.handleScanCodeForMissingKeys(validatedArgs);
+          }
           
           default:
-            throw new I18nError(`Unknown tool: ${name}`, 'UNKNOWN_TOOL');
+            return {
+              content: [
+                {
+                  type: 'text',
+                  text: `Unknown tool: ${name}`
+                }
+              ],
+              isError: true
+            };
         }
       } catch (error) {
-        if (error instanceof I18nError) {
-          return {
-            content: [
-              {
-                type: 'text',
-                text: `Error: ${error.message}${error.details ? `\nDetails: ${JSON.stringify(error.details, null, 2)}` : ''}`
-              }
-            ],
-            isError: true
-          };
-        }
+        console.error(`Tool execution error (${name}):`, error);
         
         return {
           content: [
             {
               type: 'text',
-              text: `Unexpected error: ${error instanceof Error ? error.message : String(error)}`
+              text: `Error executing tool "${name}": ${error instanceof Error ? error.message : String(error)}`
             }
           ],
           isError: true
@@ -578,7 +620,7 @@ export class I18nTranslationServer {
     };
   }
 
-  private async handleHealthCheck(args: unknown): Promise<{ content: Array<{ type: string; text: string }> }> {
+  private async handleHealthCheck(args: z.infer<typeof healthCheckSchema>): Promise<{ content: Array<{ type: string; text: string }> }> {
     if (!this.healthChecker) throw new Error('Health checker not initialized');
     
     const parsed = z.object({
@@ -646,7 +688,7 @@ export class I18nTranslationServer {
     };
   }
 
-  private async handleValidateFiles(args: unknown): Promise<{ content: Array<{ type: string; text: string }> }> {
+  private async handleValidateFiles(args: z.infer<typeof validateFilesSchema>): Promise<{ content: Array<{ type: string; text: string }> }> {
     if (!this.fileManager) throw new Error('File manager not initialized');
     
     const parsed = z.object({
@@ -751,7 +793,7 @@ export class I18nTranslationServer {
     return { content: [{ type: 'text', text: JSON.stringify(report, null, 2) }] };
   }
 
-  private async handleExportData(args: unknown): Promise<{ content: Array<{ type: string; text: string }> }> {
+  private async handleExportData(args: z.infer<typeof exportDataSchema>): Promise<{ content: Array<{ type: string; text: string }> }> {
     if (!this.analyticsEngine) throw new Error('Analytics engine not initialized');
     const schema = z.object({
       format: z.enum(['json', 'csv', 'xlsx', 'gettext']),
@@ -1271,7 +1313,7 @@ export class I18nTranslationServer {
       }
 
       const transport = new StdioServerTransport();
-      this.server.connect(transport);
+      await this.server.connect(transport);
       console.error('i18next Translation MCP Server running on stdio');
     } catch (error) {
       console.error('Failed to start MCP server:', error);
@@ -1280,13 +1322,108 @@ export class I18nTranslationServer {
   }
 }
 
-// Start the server if this file is run directly
-if (import.meta.url === `file://${process.argv[1]}`) {
-  const server = new I18nTranslationServer();
-  server.start().catch((error) => {
-    console.error('Failed to start server:', error);
-    process.exit(1);
-  });
+// Main function following MCP best practices
+async function main(): Promise<void> {
+  // Check for CLI arguments
+  const args = process.argv.slice(2);
+  
+  // Handle help flag
+  if (args.includes('--help') || args.includes('-h')) {
+    console.log(`
+i18next MCP Server v1.0.7
+==========================
+
+This is a Model Context Protocol (MCP) server for i18next translation management.
+
+USAGE:
+  # For MCP clients (like Cursor):
+  npx i18next-mcp-server@latest
+
+  # Manual testing with MCP protocol:
+  echo '{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2024-11-05","capabilities":{},"clientInfo":{"name":"test","version":"1.0.0"}}}' | npx i18next-mcp-server@latest
+
+CONFIGURATION:
+Set these environment variables:
+  I18N_PROJECT_ROOT     - Absolute path to your project
+  I18N_LOCALES_DIR      - Relative path to locales folder (default: public/locales)
+  I18N_LANGUAGES        - Comma-separated language codes (e.g., en,es,fr)
+  I18N_DEFAULT_LANGUAGE - Default/source language (default: en)
+
+CURSOR INTEGRATION:
+Add to your ~/.cursor/mcp_settings.json:
+{
+  "mcpServers": {
+    "i18next": {
+      "command": "npx",
+      "args": ["-y", "i18next-mcp-server@latest"],
+      "env": {
+        "I18N_PROJECT_ROOT": "/absolute/path/to/your/project",
+        "I18N_LOCALES_DIR": "public/locales",
+        "I18N_LANGUAGES": "en,es,fr",
+        "I18N_DEFAULT_LANGUAGE": "en"
+      }
+    }
+  }
 }
+
+TOOLS PROVIDED:
+- get_project_info       - Get project configuration and status
+- health_check          - Comprehensive health check on translation files
+- validate_files        - Validate JSON syntax and structure
+- list_files           - List all translation files
+- coverage_report      - Generate coverage report
+- quality_analysis     - Analyze translation quality
+- usage_analysis       - Analyze translation key usage
+- export_data          - Export translations in various formats
+- sync_missing_keys    - Sync missing keys across languages
+- add_translation_key  - Add new translation keys
+- And more...
+
+For more information: https://github.com/gtrias/i18next-mcp-server
+`);
+    process.exit(0);
+  }
+  
+      // Handle version flag
+    if (args.includes('--version') || args.includes('-v')) {
+      console.log('1.0.7');
+      process.exit(0);
+    }
+  
+  // Handle test flag
+  if (args.includes('--test')) {
+    console.log('Testing MCP server initialization...');
+    try {
+      const server = new I18nTranslationServer();
+      console.log('✅ Server instance created successfully');
+      
+      // Test configuration loading
+      await server['configManager'].loadConfig();
+      console.log('✅ Configuration loaded successfully');
+      
+      console.log('✅ MCP server is ready for connection');
+      console.log('\nTo connect with MCP client, run without --test flag');
+      process.exit(0);
+    } catch (error) {
+      console.error('❌ Server test failed:', error);
+      process.exit(1);
+    }
+  }
+  
+  // Default behavior: start MCP server
+  try {
+    const server = new I18nTranslationServer();
+    await server.start();
+  } catch (error) {
+    console.error('Fatal error:', error);
+    process.exit(1);
+  }
+}
+
+// Always run main() when this module is executed - npx compatibility
+main().catch((error) => {
+  console.error('Failed to start server:', error);
+  process.exit(1);
+});
 
 export default I18nTranslationServer; 

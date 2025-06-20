@@ -94,4 +94,16 @@ jspm_packages/
 .tern-port
 
 # Stores VSCode versions used for testing VSCode extensions
-.vscode-test 
+.vscode-test
+
+# Added by Task Master AI
+dev-debug.log
+# Editor directories and files
+.idea
+.vscode
+*.suo
+*.ntvs*
+*.njsproj
+*.sln
+*.sw?
+# OS specific

@@ -57,22 +57,113 @@
         "id": 30,
         "title": "Implement End-to-End Cursor Integration Test",
         "description": "Create an end-to-end test that simulates how Cursor would interact with the i18next-mcp-server to verify the integration works correctly.",
-        "details": "Create a test file `tests/cursor-integration.test.ts` that simulates the Cursor client integration:\n\n1. Setup a mock Cursor client:\n```typescript\nimport { describe, it, expect, beforeAll, afterAll } from 'vitest'\nimport { startServer } from '../src/server'\nimport { MockCursorClient } from './mock-cursor-client'\n\ndescribe('Cursor Integration', () => {\n  let server: any\n  let cursorClient: MockCursorClient\n  \n  beforeAll(async () => {\n    server = await startServer({ port: 3456 })\n    cursorClient = new MockCursorClient('http://localhost:3456')\n  })\n  \n  afterAll(async () => {\n    await server.close()\n  })\n  \n  it('successfully initializes connection with server', async () => {\n    const initResult = await cursorClient.initialize()\n    expect(initResult.success).toBe(true)\n  })\n})\n```\n\n2. Test the complete workflow that Cursor would typically use:\n```typescript\nit('completes a typical Cursor workflow successfully', async () => {\n  // 1. Initialize connection\n  await cursorClient.initialize()\n  \n  // 2. List available tools\n  const tools = await cursorClient.listTools()\n  expect(tools).toContain('get_project_info')\n  expect(tools).toContain('health_check')\n  expect(tools).toContain('validate_files')\n  \n  // 3. Call health check\n  const healthResult = await cursorClient.callTool('health_check', {})\n  expect(healthResult.status).toBe('ok')\n  \n  // 4. Get project info\n  const projectInfo = await cursorClient.callTool('get_project_info', {})\n  expect(projectInfo).toHaveProperty('name')\n  \n  // 5. Validate some files\n  const validationResult = await cursorClient.callTool('validate_files', {\n    files: ['test-fixtures/valid.json', 'test-fixtures/invalid.json']\n  })\n  expect(validationResult).toHaveProperty('valid')\n  expect(validationResult).toHaveProperty('issues')\n})\n```\n\nImplement a `MockCursorClient` class that simulates how Cursor would interact with the MCP server.",
-        "testStrategy": "Create an end-to-end test that simulates the complete workflow a Cursor client would use when interacting with the server. Verify that all steps in the workflow complete successfully. Test with both valid and invalid inputs to ensure proper error handling. This test should catch integration issues that users might experience.",
-        "priority": "high",
+        "status": "in-progress",
         "dependencies": [
           26,
           27,
           28,
           29
         ],
-        "status": "pending",
-        "subtasks": []
+        "priority": "high",
+        "details": "Create a test file `tests/cursor-integration.test.ts` that simulates the Cursor client integration. This test has been successfully implemented and has helped verify that the server works correctly with the MCP protocol.\n\nThe test implementation includes:\n\n1. A mock Cursor client that simulates the MCP protocol interactions\n2. End-to-end tests that verify the complete workflow:\n   - Initializing connection with the server\n   - Listing available tools (all 14 tools are properly exposed)\n   - Calling health check\n   - Getting project info\n   - Validating files\n\nAdditionally, a `debug-cursor.js` script has been created to help users troubleshoot their Cursor MCP configuration issues.\n\nThe testing revealed that the \"No server info found\" error some users experienced was due to Cursor MCP configuration issues, not server problems. The key requirements for proper configuration are:\n\n- I18N_PROJECT_ROOT must be an absolute path\n- Proper environment variables must be set up\n- Cursor needs to be restarted after config changes\n- MCP version must be set to 1.0.3 (not 1.0.2) in the mcp.json file\n\nA comprehensive `CURSOR_SETUP.md` guide has been created with step-by-step configuration instructions and example configurations for Next.js/React projects. The guide should be updated to emphasize the importance of using the correct MCP version (1.0.3).\n\nMajor improvements have been implemented to follow TypeScript MCP best practices, including:\n- Zod schema validation for all tools in a dedicated schemas.ts file\n- Proper error handling using `isError: true` format\n- Recommended main() function structure for server initialization\n- Proper async handling with `await server.connect(transport)`\n- Executable permissions via `chmod +x dist/index.js` in the build script\n- Type safety with Zod-inferred types instead of `unknown`\n- Consistent error responses following MCP standards\n\nA binary installation issue has been identified: while the MCP server works correctly when run directly (node dist/index.js), there's an issue with the npm binary installation when using npx. The binary is not being found by the system despite proper bin configuration in package.json. Until this is resolved, users should use the direct node command approach instead of npx.\n\nCompleted improvements include:\n- Comprehensive CLI interface with --help, --version, --test flags\n- Proper help documentation showing Cursor integration steps\n- Test mode to verify configuration without starting MCP server\n- All MCP best practices implemented (Zod validation, error handling, async connection)\n- Server functionality verified working correctly",
+        "testStrategy": "The implemented end-to-end test simulates the complete workflow a Cursor client uses when interacting with the server. It verifies that all steps in the workflow complete successfully, including initialization, tool discovery, and tool execution. The test includes both valid and invalid inputs to ensure proper error handling. This test successfully caught integration issues that users might experience and confirmed that the server implementation is working correctly with the MCP protocol. The test should also verify compatibility with different MCP versions, particularly ensuring proper functionality with version 1.0.3.\n\nWith the recent implementation of MCP best practices, the tests should be expanded to verify:\n1. Proper Zod schema validation for all tool inputs\n2. Consistent error handling using the `isError: true` format\n3. Proper async server connection\n4. Type safety throughout the codebase\n5. Executable permissions for the built package\n\nAdditional testing is needed to address the npm binary installation issue. Tests should verify that the binary can be properly executed when installed globally or via npx. The test strategy should also include verification of the CLI interface functionality, including the --help, --version, and --test flags.",
+        "subtasks": [
+          {
+            "id": 30.1,
+            "title": "Create MockCursorClient class",
+            "status": "completed",
+            "description": "Implemented a MockCursorClient class that simulates how Cursor interacts with the MCP server protocol."
+          },
+          {
+            "id": 30.2,
+            "title": "Implement cursor-integration.test.ts",
+            "status": "completed",
+            "description": "Created end-to-end tests that verify the complete MCP workflow from initialization to tool execution."
+          },
+          {
+            "id": 30.3,
+            "title": "Create debug-cursor.js script",
+            "status": "completed",
+            "description": "Developed a debugging script to help users troubleshoot Cursor MCP configuration issues."
+          },
+          {
+            "id": 30.4,
+            "title": "Create CURSOR_SETUP.md guide",
+            "status": "completed",
+            "description": "Wrote comprehensive documentation with step-by-step configuration instructions and example configurations for different project types."
+          },
+          {
+            "id": 30.5,
+            "title": "Document configuration requirements",
+            "status": "completed",
+            "description": "Documented key requirements for proper Cursor configuration, including absolute path requirements, environment variables, and restart procedures."
+          },
+          {
+            "id": 30.6,
+            "title": "Update CURSOR_SETUP.md with MCP version requirements",
+            "status": "to-do",
+            "description": "Update the setup guide to explicitly mention the requirement for MCP version 1.0.3 in the mcp.json file, and include a troubleshooting section for version-related issues."
+          },
+          {
+            "id": 30.7,
+            "title": "Enhance debug-cursor.js to check MCP version",
+            "status": "to-do",
+            "description": "Update the debugging script to verify the MCP version in the user's configuration and warn if an outdated version (like 1.0.2) is detected."
+          },
+          {
+            "id": 30.8,
+            "title": "Add version compatibility test",
+            "status": "to-do",
+            "description": "Extend the cursor integration tests to verify compatibility with different MCP versions, particularly ensuring proper functionality with version 1.0.3."
+          },
+          {
+            "id": 30.9,
+            "title": "Test Zod schema validation",
+            "status": "to-do",
+            "description": "Add tests to verify that the Zod schemas properly validate tool inputs and reject invalid inputs with appropriate error messages."
+          },
+          {
+            "id": 30.11,
+            "title": "Test async server connection",
+            "status": "to-do",
+            "description": "Add tests to verify that the server properly handles async connection with `await server.connect(transport)`."
+          },
+          {
+            "id": 30.12,
+            "title": "Update documentation with best practices",
+            "status": "to-do",
+            "description": "Update the documentation to reflect the implemented MCP best practices and provide guidance for users on how to properly interact with the server."
+          },
+          {
+            "id": 30.13,
+            "title": "Document npm binary installation workaround",
+            "status": "to-do",
+            "description": "Update CURSOR_SETUP.md with the current workaround for the npm binary installation issue, including instructions for global installation and direct path configuration in mcp.json."
+          },
+          {
+            "id": 30.14,
+            "title": "Debug npm binary installation issue",
+            "status": "to-do",
+            "description": "Investigate why the npm binary is not being found by the system despite proper bin configuration in package.json. Test different installation methods and environments."
+          },
+          {
+            "id": 30.15,
+            "title": "Test CLI interface functionality",
+            "status": "to-do",
+            "description": "Create tests to verify the functionality of the CLI interface, including the --help, --version, and --test flags."
+          },
+          {
+            "id": 30.16,
+            "title": "Explore alternative distribution methods",
+            "status": "to-do",
+            "description": "Research and evaluate alternative distribution methods that might avoid the binary installation issue, such as Docker containers or standalone executables."
+          }
+        ]
       }
     ],
     "metadata": {
       "created": "2025-06-19T20:30:49.828Z",
-      "updated": "2025-06-19T20:42:55.378Z",
+      "updated": "2025-06-19T20:47:23.693Z",
       "description": "Tasks for master context"
     }
   }
