@@ -4,8 +4,6 @@ import fs from 'node:fs/promises';
 import path from 'node:path';
 import type { I18nConfig } from '../types/index.js';
 
-const execAsync = promisify(exec);
-
 export interface ScannerResult {
   success: boolean;
   extractedKeys: string[];
@@ -34,10 +32,12 @@ export interface UsageAnalysis {
 export class I18nextScannerIntegration {
   private config: I18nConfig;
   private projectRoot: string;
+  private execAsync: (command: string, options?: any) => Promise<{ stdout: string; stderr: string }>;
 
   constructor(config: I18nConfig) {
     this.config = config;
-    this.projectRoot = '/home/genar/src/galleries'; // Set to the actual project root
+    this.projectRoot = config.projectRoot || process.cwd();
+    this.execAsync = promisify(exec);
   }
 
   /**
@@ -75,7 +75,7 @@ export class I18nextScannerIntegration {
 
       console.log(`Running: ${command}`);
       
-      const { stdout, stderr } = await execAsync(command, {
+      const { stdout, stderr } = await this.execAsync(command, {
         cwd: this.projectRoot,
         maxBuffer: 1024 * 1024 * 10 // 10MB buffer
       });
@@ -123,8 +123,8 @@ export class I18nextScannerIntegration {
 
       for (const lang of languages) {
         for (const ns of namespaces) {
-          const extractedFilePath = path.join(extractPath, 'apps/client/public/locales', lang, `${ns}.json`);
-          const currentFilePath = path.join('apps/client/public/locales', lang, `${ns}.json`);
+          const extractedFilePath = path.join(extractPath, this.config.localesPath, lang, `${ns}.json`);
+          const currentFilePath = path.join(this.config.localesPath, lang, `${ns}.json`);
 
           try {
             // Read extracted keys (what should exist)
@@ -146,9 +146,9 @@ export class I18nextScannerIntegration {
                 totalMissing: missingKeys.length
               });
             }
-                     } catch (error) {
-             console.warn(`Could not analyze ${lang}/${ns}:`, error instanceof Error ? error.message : String(error));
-           }
+          } catch (error) {
+            console.warn(`Could not analyze ${lang}/${ns}:`, error instanceof Error ? error.message : String(error));
+          }
         }
       }
 
@@ -189,59 +189,57 @@ export class I18nextScannerIntegration {
       const usedKeys = new Set<string>();
       const keysByNamespace: Record<string, Set<string>> = {};
 
-             // Collect all used keys from extracted files
+      // Collect all used keys from extracted files
       for (const ns of namespaces) {
         keysByNamespace[ns] = new Set();
         
         for (const lang of languages) {
-          const extractedFilePath = path.join(extractPath, 'apps/client/public/locales', lang, `${ns}.json`);
+          const extractedFilePath = path.join(extractPath, this.config.localesPath, lang, `${ns}.json`);
           
           try {
             const extractedData = await this.readJSONFile(extractedFilePath);
             if (extractedData) {
               const keys = this.flattenKeys(extractedData);
-              for (const key of keys) {
+              keys.forEach(key => {
                 usedKeys.add(key);
                 keysByNamespace[ns].add(key);
-              }
+              });
             }
-          } catch {
-            // File might not exist, that's okay
+          } catch (error) {
+            console.warn(`Could not read extracted file ${extractedFilePath}:`, error instanceof Error ? error.message : String(error));
           }
         }
       }
 
-      // Now check current translation files for orphaned keys
-      const allExistingKeys = new Set<string>();
-      
+      // Now compare with actual translation files to find orphaned keys
       for (const lang of languages) {
         for (const ns of namespaces) {
-          const currentFilePath = path.join('apps/client/public/locales', lang, `${ns}.json`);
+          const currentFilePath = path.join(this.config.localesPath, lang, `${ns}.json`);
           
-                     try {
-             const currentData = await this.readJSONFile(currentFilePath);
-             if (currentData) {
-               const keys = this.flattenKeys(currentData);
-               for (const key of keys) {
-                 allExistingKeys.add(key);
-               }
-             }
-           } catch {
-             // File might not exist
-           }
+          try {
+            const currentData = await this.readJSONFile(currentFilePath);
+            if (currentData) {
+              const currentKeys = this.flattenKeys(currentData);
+              const orphaned = currentKeys.filter(key => !usedKeys.has(key));
+              analysis.orphanedKeys.push(...orphaned);
+              
+              analysis.keysByFile[currentFilePath] = currentKeys;
+            }
+          } catch (error) {
+            console.warn(`Could not read current file ${currentFilePath}:`, error instanceof Error ? error.message : String(error));
+          }
         }
       }
 
-      // Find orphaned keys (exist in translation files but not used in code)
-      analysis.orphanedKeys = Array.from(allExistingKeys).filter(key => !usedKeys.has(key));
       analysis.totalUsedKeys = usedKeys.size;
+      analysis.unusedKeys = Array.from(analysis.orphanedKeys);
       
-      // Convert Sets to arrays for the result
-      analysis.keysByNamespace = Object.fromEntries(
-        Object.entries(keysByNamespace).map(([ns, keys]) => [ns, Array.from(keys)])
-      );
+      // Convert sets to arrays for final result
+      for (const ns in keysByNamespace) {
+        analysis.keysByNamespace[ns] = Array.from(keysByNamespace[ns]);
+      }
 
-      // Clean up temporary files
+      // Clean up temporary extraction
       await this.cleanupTempFiles('./temp-i18n-extract/');
 
     } catch (error) {
@@ -252,7 +250,7 @@ export class I18nextScannerIntegration {
   }
 
   /**
-   * Synchronize missing keys across all languages
+   * Sync missing keys between languages
    */
   async syncMissingKeys(options: {
     sourceLanguage?: string;
@@ -261,14 +259,6 @@ export class I18nextScannerIntegration {
     placeholder?: string;
     dryRun?: boolean;
   } = {}): Promise<{ success: boolean; changes: Record<string, number>; errors: string[] }> {
-    const {
-      sourceLanguage = 'en',
-      targetLanguages = this.config.languages?.filter(lang => lang !== sourceLanguage) || ['es', 'ca'],
-      namespaces = this.config.namespaces || ['translation'],
-      placeholder = '',
-      dryRun = false
-    } = options;
-
     const result = {
       success: false,
       changes: {} as Record<string, number>,
@@ -276,99 +266,166 @@ export class I18nextScannerIntegration {
     };
 
     try {
-      // First scan to get latest keys
+      const sourceLanguage = options.sourceLanguage || this.config.defaultLanguage || 'en';
+      const targetLanguages = options.targetLanguages || this.config.languages?.filter(lang => lang !== sourceLanguage) || [];
+      const namespaces = options.namespaces || this.config.namespaces || ['translation'];
+      const placeholder = options.placeholder || '{{TRANSLATE_ME}}';
+
+      // First scan to get current state
       const scanResult = await this.scanCodebase();
       if (!scanResult.success) {
-        throw new Error('Failed to scan codebase for latest keys');
+        throw new Error('Failed to scan codebase for sync operation');
       }
 
-      // Analyze missing keys
-      const missingAnalysis = await this.analyzeMissingKeys();
-
-      // Group missing keys by target language and namespace
-      for (const analysis of missingAnalysis) {
-        if (!targetLanguages.includes(analysis.language)) continue;
-        if (!namespaces.includes(analysis.namespace)) continue;
-        if (analysis.missingKeys.length === 0) continue;
-
-        const changeKey = `${analysis.language}/${analysis.namespace}`;
-        result.changes[changeKey] = analysis.missingKeys.length;
-
-        if (!dryRun) {
-          // Read source language file to get values
-          const sourceFilePath = path.join('apps/client/public/locales', sourceLanguage, `${analysis.namespace}.json`);
-          const targetFilePath = path.join('apps/client/public/locales', analysis.language, `${analysis.namespace}.json`);
-
-          try {
-            const sourceData = await this.readJSONFile(sourceFilePath) || {};
-            const targetData = await this.readJSONFile(targetFilePath) || {};
-
-            // Add missing keys
-            for (const missingKey of analysis.missingKeys) {
-              const sourceValue = this.getNestedValue(sourceData, missingKey);
-              const valueToSet = sourceValue || placeholder || missingKey;
-              this.setNestedValue(targetData, missingKey, valueToSet);
-            }
-
-            // Write updated file
-            await this.writeJSONFile(targetFilePath, targetData);
-            console.log(`Updated ${changeKey}: added ${analysis.missingKeys.length} keys`);
-
-          } catch (error) {
-            const errorMsg = `Failed to sync ${changeKey}: ${error instanceof Error ? error.message : String(error)}`;
-            result.errors.push(errorMsg);
+      for (const ns of namespaces) {
+        const sourceFilePath = path.join(this.config.localesPath, sourceLanguage, `${ns}.json`);
+        
+        try {
+          const sourceData = await this.readJSONFile(sourceFilePath);
+          if (!sourceData) {
+            result.errors.push(`Source file not found: ${sourceFilePath}`);
+            continue;
           }
+
+          const sourceKeys = this.flattenKeys(sourceData);
+
+          for (const targetLang of targetLanguages) {
+            const targetFilePath = path.join(this.config.localesPath, targetLang, `${ns}.json`);
+            
+            try {
+              let targetData = await this.readJSONFile(targetFilePath) || {};
+              const targetKeys = this.flattenKeys(targetData);
+              
+              const missingKeys = sourceKeys.filter(key => !targetKeys.includes(key));
+              
+              if (missingKeys.length > 0) {
+                // Add missing keys with placeholder values
+                for (const key of missingKeys) {
+                  const sourceValue = this.getNestedValue(sourceData, key);
+                  if (sourceValue !== undefined) {
+                    this.setNestedValue(targetData, key, placeholder);
+                  }
+                }
+
+                if (!options.dryRun) {
+                  // Ensure directory exists
+                  await fs.mkdir(path.dirname(targetFilePath), { recursive: true });
+                  await this.writeJSONFile(targetFilePath, targetData);
+                }
+
+                result.changes[`${targetLang}/${ns}`] = missingKeys.length;
+              }
+            } catch (error) {
+              result.errors.push(`Failed to process ${targetLang}/${ns}: ${error instanceof Error ? error.message : String(error)}`);
+            }
+          }
+        } catch (error) {
+          result.errors.push(`Failed to read source ${sourceLanguage}/${ns}: ${error instanceof Error ? error.message : String(error)}`);
         }
       }
 
       result.success = result.errors.length === 0;
 
     } catch (error) {
-      const errorMsg = error instanceof Error ? error.message : String(error);
-      result.errors.push(errorMsg);
+      result.errors.push(error instanceof Error ? error.message : String(error));
     }
 
     return result;
   }
 
-  // Helper methods
-  private parseExtractedKeys(_outputLines: string[]): string[] {
-    // This is a simplified parser - in practice, you'd analyze the generated files
+  private parseExtractedKeys(outputLines: string[]): string[] {
     const keys: string[] = [];
-    // The actual implementation would read the generated JSON files
-    return keys;
+    
+    for (const line of outputLines) {
+      const trimmedLine = line.trim();
+      
+      // Look for common patterns in scanner output
+      // Pattern 1: "Found key: keyName"
+      if (trimmedLine.startsWith('Found key:')) {
+        const key = trimmedLine.replace('Found key:', '').trim();
+        if (key) keys.push(key);
+      }
+      
+      // Pattern 2: "- keyName" (list format)
+      if (trimmedLine.startsWith('- ') && !trimmedLine.includes('.tsx') && !trimmedLine.includes('.ts') && !trimmedLine.includes('.js')) {
+        const key = trimmedLine.replace('- ', '').trim();
+        if (key && !key.includes('/')) keys.push(key);
+      }
+      
+      // Pattern 3: JSON-like format "keyName": "value"
+      const jsonMatch = trimmedLine.match(/^"([^"]+)":\s*"[^"]*"$/);
+      if (jsonMatch) {
+        keys.push(jsonMatch[1]);
+      }
+      
+      // Pattern 4: Simple key extraction from t('key') patterns
+      const tFunctionMatch = trimmedLine.match(/t\(['"`]([^'"`]+)['"`]\)/g);
+      if (tFunctionMatch) {
+        for (const match of tFunctionMatch) {
+          const keyMatch = match.match(/t\(['"`]([^'"`]+)['"`]\)/);
+          if (keyMatch) {
+            keys.push(keyMatch[1]);
+          }
+        }
+      }
+    }
+    
+    // Remove duplicates and empty keys
+    return [...new Set(keys.filter(key => key && key.length > 0))];
   }
 
   private parseAffectedFiles(outputLines: string[]): string[] {
-    // Parse scanner output to find which files were processed
-    return outputLines
-      .filter(line => line.includes('.tsx') || line.includes('.ts'))
-      .map(line => line.trim())
-      .filter(Boolean);
+    const files: string[] = [];
+    
+    for (const line of outputLines) {
+      const trimmedLine = line.trim();
+      
+      // Look for file paths in scanner output
+      if (trimmedLine.includes('.tsx') || trimmedLine.includes('.ts') || trimmedLine.includes('.js') || trimmedLine.includes('.jsx')) {
+        // Pattern 1: "Processing file: path/to/file.tsx"
+        if (trimmedLine.startsWith('Processing file:')) {
+          const file = trimmedLine.replace('Processing file:', '').trim();
+          if (file) files.push(file);
+        }
+        
+        // Pattern 2: "- path/to/file.tsx"
+        if (trimmedLine.startsWith('- ') && (trimmedLine.includes('/') || trimmedLine.includes('\\'))) {
+          const file = trimmedLine.replace('- ', '').trim();
+          if (file) files.push(file);
+        }
+        
+        // Pattern 3: Just a file path on its own line
+        if (trimmedLine.match(/^[^\s]+\.(tsx?|jsx?|vue)$/)) {
+          files.push(trimmedLine);
+        }
+      }
+    }
+    
+    // Remove duplicates
+    return [...new Set(files)];
   }
 
   private async readJSONFile(filePath: string): Promise<Record<string, unknown> | null> {
     try {
       const content = await fs.readFile(filePath, 'utf-8');
-      return JSON.parse(content) as Record<string, unknown>;
-    } catch {
+      return JSON.parse(content);
+    } catch (error) {
       return null;
     }
   }
 
   private async writeJSONFile(filePath: string, data: Record<string, unknown>): Promise<void> {
-    await fs.mkdir(path.dirname(filePath), { recursive: true });
-    await fs.writeFile(filePath, `${JSON.stringify(data, null, 2)}\n`, 'utf-8');
+    await fs.writeFile(filePath, JSON.stringify(data, null, 2), 'utf-8');
   }
 
   private flattenKeys(obj: Record<string, unknown>, prefix = ''): string[] {
     const keys: string[] = [];
     
-    for (const [key, value] of Object.entries(obj)) {
-      const fullKey = prefix ? `${prefix}.${key}` : key;
+    for (const key in obj) {
+      const fullKey = prefix ? `${prefix}${this.config.keySeparator || '.'}${key}` : key;
       
-      if (typeof value === 'object' && value !== null && !Array.isArray(value)) {
-        keys.push(...this.flattenKeys(value as Record<string, unknown>, fullKey));
+      if (typeof obj[key] === 'object' && obj[key] !== null && !Array.isArray(obj[key])) {
+        keys.push(...this.flattenKeys(obj[key] as Record<string, unknown>, fullKey));
       } else {
         keys.push(fullKey);
       }
@@ -378,30 +435,41 @@ export class I18nextScannerIntegration {
   }
 
   private getNestedValue(obj: Record<string, unknown>, path: string): unknown {
-    return path.split('.').reduce((current: unknown, key) => 
-      (current as Record<string, unknown>)?.[key], obj);
+    const keys = path.split(this.config.keySeparator || '.');
+    let current: any = obj;
+    
+    for (const key of keys) {
+      if (current && typeof current === 'object' && key in current) {
+        current = current[key];
+      } else {
+        return undefined;
+      }
+    }
+    
+    return current;
   }
 
   private setNestedValue(obj: Record<string, unknown>, path: string, value: unknown): void {
-    const keys = path.split('.');
-    const lastKey = keys.pop();
-    if (!lastKey) return;
+    const keys = path.split(this.config.keySeparator || '.');
+    let current: any = obj;
     
-    const target = keys.reduce((current: Record<string, unknown>, key) => {
-      if (!(key in current)) {
+    for (let i = 0; i < keys.length - 1; i++) {
+      const key = keys[i];
+      if (!(key in current) || typeof current[key] !== 'object') {
         current[key] = {};
       }
-      return current[key] as Record<string, unknown>;
-    }, obj);
+      current = current[key];
+    }
     
-    target[lastKey] = value;
+    current[keys[keys.length - 1]] = value;
   }
 
   private async cleanupTempFiles(dirPath: string): Promise<void> {
     try {
       await fs.rm(dirPath, { recursive: true, force: true });
-    } catch {
+    } catch (error) {
       // Ignore cleanup errors
+      console.warn('Failed to cleanup temp files:', error instanceof Error ? error.message : String(error));
     }
   }
 } 
